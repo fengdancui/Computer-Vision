@@ -69,30 +69,57 @@ def canny_edge(gray):
                     grad2 = mag[i - 1, j]
                     grad4 = mag[i + 1, j]
 
+                    # if the signs of both derivate of x and y are same
+                    # the position of pixel are:
+                    # g1    g2
+                    #       c
+                    #       g4    g3
                     if grad_x * grad_y > 0:
                         grad1 = mag[i - 1, j - 1]
                         grad3 = mag[i + 1, j + 1]
+
+                    # the signs are different
+                    #       g2    g1
+                    #       c
+                    # g3    g4
                     else:
                         grad1 = mag[i - 1, j + 1]
                         grad3 = mag[i + 1, j - 1]
 
+                # if the gradient along x is larger
                 else:
                     weight = np.abs(grad_y) / np.abs(grad_x)
                     grad2 = mag[i, j - 1]
                     grad4 = mag[i, j + 1]
 
+                    # signs same
+                    #             g3
+                    # g2    c     g4
+                    # g1
                     if grad_x * grad_y > 0:
                         grad1 = mag[i + 1, j - 1]
                         grad3 = mag[i - 1, j + 1]
+
+                    # signs different
+                    # g1
+                    # g2    c     g4
+                    #             g3
                     else:
                         grad1 = mag[i - 1, j - 1]
                         grad3 = mag[i + 1, j + 1]
 
+                # interpolation
                 mag1 = weight * grad1 + (1 - weight) * grad2
                 mag2 = weight * grad3 + (1 - weight) * grad4
 
                 if mag[i, j] >= mag1 and mag[i, j] >= mag2:
                     non_max[i, j] = mag[i, j]
+
+    non_max = non_max / np.max(non_max)
+    non_max = non_max * 255.
+    out = np.clip(non_max, 0, 255)
+    out = out.astype(np.uint8)
+    return out
 
 
 def detect_edges(imlist, fn, out_dir, flag=False):
@@ -101,8 +128,8 @@ def detect_edges(imlist, fn, out_dir, flag=False):
         gray = cv2.cvtColor(I, cv2.COLOR_BGR2GRAY)
 
         if flag:
-
-            mag = fn(cv2.GaussianBlur(gray, (3, 3), 0.8))
+            mag = canny_edge(gray)
+            # mag = fn(cv2.GaussianBlur(gray, (3, 3), 0.8))
         else:
             mag = fn(gray)
         out_file_name = os.path.join(out_dir, str(imname) + '.png')
@@ -161,7 +188,7 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     print('Running detector:')
-    detect_edges(imlist, fn, output_dir)
+    detect_edges(imlist, fn, output_dir, True)
 
     _load_pred = lambda x: load_pred(output_dir, x)
     print('Evaluating:')
