@@ -29,9 +29,12 @@ def compute_edges_dxdy(I):
     dx = signal.convolve2d(I, np.array([[-1, 0, 1]]), mode='same')
     dy = signal.convolve2d(I, np.array([[-1, 0, 1]]).T, mode='same')
 
+    # after Q1 another way for convolution
+    # dx, dy = sobel_edge_dxdy(I)
+
     mag = np.sqrt(dx ** 2 + dy ** 2)
     mag = mag / np.max(mag)
-    mag = mag * 255.
+    mag = mag * 255
     mag = np.clip(mag, 0, 255)
     mag = mag.astype(np.uint8)
     return mag
@@ -115,23 +118,40 @@ def canny_edge(gray):
                 if mag[i, j] >= mag1 and mag[i, j] >= mag2:
                     non_max[i, j] = mag[i, j]
 
-    non_max = non_max / np.max(non_max)
-    non_max = non_max * 255.
-    out = np.clip(non_max, 0, 255)
-    out = out.astype(np.uint8)
+    mag = non_max * 255 / np.max(non_max)
+    out = np.clip(mag, 0, 255).astype(np.uint8)
     return out
 
 
-def detect_edges(imlist, fn, out_dir, flag=False):
+def lab_edge(I):
+    lab = cv2.cvtColor(I, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l_edge = canny_edge(l)
+    a_edge = canny_edge(a)
+    b_edge = canny_edge(b)
+    merge = np.copy(l_edge)
+    merge[a_edge == 255] = 255
+    merge[b_edge == 255] = 255
+
+    return merge
+
+
+def detect_edges(imlist, fn, out_dir):
     for imname in tqdm(imlist):
         I = cv2.imread(os.path.join(IMAGE_DIR, str(imname) + '.jpg'))
         gray = cv2.cvtColor(I, cv2.COLOR_BGR2GRAY)
 
-        if flag:
-            mag = canny_edge(gray)
-            # mag = fn(cv2.GaussianBlur(gray, (3, 3), 0.8))
-        else:
-            mag = fn(gray)
+        # after Q2 gaussian blur
+        # mag = fn(cv2.GaussianBlur(gray, (3, 3), 0.8))
+
+        # after Q3 non - maximum suppression and interpolation
+        # mag = canny_edge(gray)
+
+        # after Q4 using LAB for edge detection
+        # mag = lab_edge(I)
+
+        # original simlpe method
+        mag = fn(gray)
         out_file_name = os.path.join(out_dir, str(imname) + '.png')
         cv2.imwrite(out_file_name, mag)
 
@@ -188,7 +208,7 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     print('Running detector:')
-    detect_edges(imlist, fn, output_dir, True)
+    detect_edges(imlist, fn, output_dir)
 
     _load_pred = lambda x: load_pred(output_dir, x)
     print('Evaluating:')
