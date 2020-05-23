@@ -25,9 +25,10 @@ def get_imlist(name):
 
 def compute_edges_dxdy(I):
     """Returns the norm of dx and dy as the edge response function."""
-    I = I.astype(np.float32) / 255.
+    I = I.astype(np.float32) / 255
     dx = signal.convolve2d(I, np.array([[-1, 0, 1]]), mode='same')
     dy = signal.convolve2d(I, np.array([[-1, 0, 1]]).T, mode='same')
+
     mag = np.sqrt(dx ** 2 + dy ** 2)
     mag = mag / np.max(mag)
     mag = mag * 255.
@@ -36,11 +37,74 @@ def compute_edges_dxdy(I):
     return mag
 
 
-def detect_edges(imlist, fn, out_dir):
+def sobel_edge_dxdy(gray):
+    dx = signal.convolve2d(gray, np.mat([1, 2, 1]).T * np.mat([1, 0, -1]), mode='same')
+    dy = signal.convolve2d(gray, np.mat([1, 0, -1]).T * np.mat([1, 2, 1]), mode='same')
+
+    return dx, dy
+
+
+def canny_edge(gray):
+    # gaussian blur
+    gray_gau = cv2.GaussianBlur(gray, (3, 3), 0.8)
+
+    # sobel edge detection
+    dx, dy = sobel_edge_dxdy(gray_gau)
+    mag = np.sqrt(dx ** 2 + dy ** 2)
+    h, w = mag.shape
+    non_max = np.zeros((h, w))
+
+    # non - maximum suppression and interpolation
+    for i in range(1, h - 1):
+        for j in range(1, w - 1):
+            if mag[i, j] != 0:
+                grad_x = dx[i, j]
+                grad_y = dy[i, j]
+
+                # if the gradient along y is larger
+                # the derivative tends to y
+
+                if np.abs(grad_x) < np.abs(grad_y):
+                    weight = np.abs(grad_x) / np.abs(grad_y)
+                    grad2 = mag[i - 1, j]
+                    grad4 = mag[i + 1, j]
+
+                    if grad_x * grad_y > 0:
+                        grad1 = mag[i - 1, j - 1]
+                        grad3 = mag[i + 1, j + 1]
+                    else:
+                        grad1 = mag[i - 1, j + 1]
+                        grad3 = mag[i + 1, j - 1]
+
+                else:
+                    weight = np.abs(grad_y) / np.abs(grad_x)
+                    grad2 = mag[i, j - 1]
+                    grad4 = mag[i, j + 1]
+
+                    if grad_x * grad_y > 0:
+                        grad1 = mag[i + 1, j - 1]
+                        grad3 = mag[i - 1, j + 1]
+                    else:
+                        grad1 = mag[i - 1, j - 1]
+                        grad3 = mag[i + 1, j + 1]
+
+                mag1 = weight * grad1 + (1 - weight) * grad2
+                mag2 = weight * grad3 + (1 - weight) * grad4
+
+                if mag[i, j] >= mag1 and mag[i, j] >= mag2:
+                    non_max[i, j] = mag[i, j]
+
+
+def detect_edges(imlist, fn, out_dir, flag=False):
     for imname in tqdm(imlist):
         I = cv2.imread(os.path.join(IMAGE_DIR, str(imname) + '.jpg'))
         gray = cv2.cvtColor(I, cv2.COLOR_BGR2GRAY)
-        mag = fn(gray)
+
+        if flag:
+
+            mag = fn(cv2.GaussianBlur(gray, (3, 3), 0.8))
+        else:
+            mag = fn(gray)
         out_file_name = os.path.join(out_dir, str(imname) + '.png')
         cv2.imwrite(out_file_name, mag)
 
@@ -88,10 +152,11 @@ def display_results(ax, f, im_results, threshold_results, overall_result):
 
 
 if __name__ == '__main__':
+
     imset = 'val'
     imlist = get_imlist(imset)
-    output_dir = 'contour-output/demo';
-    fn = compute_edges_dxdy;
+    output_dir = 'contour-output/demo'
+    fn = compute_edges_dxdy
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
